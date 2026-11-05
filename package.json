@@ -1,0 +1,10 @@
+{
+  "name": "the-showcase",
+  "version": "1.0.0",
+  "private": true,
+  "description": "iOS-style canvas date selector for browsing projects by date",
+  "scripts": {
+    "serve": "python -m http.server",
+    "build": "node build-projects.js"
+  }
+}

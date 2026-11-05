@@ -6,8 +6,11 @@
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const YEAR_MIN = 1900;
-const YEAR_MAX = 2100;
+
+// Project files are named yyyy-mm-dd[-suffix].ext and listed in projects.js,
+// which build-projects.js generates from the projects/ folder.
+const PROJECT_DIR = 'projects/';
+const FILE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:-(.+?))?(?:\.[^.]+)?$/;
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", ' +
   '"Helvetica Neue", "Segoe UI", Roboto, Inter, system-ui, sans-serif';
@@ -24,6 +27,7 @@ const SNAP_SPEED = 2;      // below this speed a flick hands over to the snap sp
 const SPRING_W = 16;       // natural frequency of the critically damped snap spring
 const MAX_SPEED = 45;
 const RUBBER_LIMIT = 1.5;  // max rows you can pull past either end
+const REVEAL_RATE = 12;    // how fast the suffix column slides in and out
 
 // Layout in design units; the whole scene is scaled to fit the viewport.
 const CW = 360;
@@ -33,6 +37,17 @@ const BUTTONS_TOP = PICKER_TOP + PICKER_H + 24;
 const BUTTON_H = 44;
 const TOTAL_H = BUTTONS_TOP + BUTTON_H;
 const BAND_INSET = 8;
+
+// Column [x0, x1, cx] and separator positions, without and with the suffix column.
+const LAYOUT_3 = {
+  cols: [[0, 140, 68], [140, 264, 202], [264, 360, 314], [360, 360, 420]],
+  seps: [140, 264, 360],
+};
+const LAYOUT_4 = {
+  cols: [[0, 104, 54], [104, 188, 146], [188, 252, 222], [252, 360, 304]],
+  seps: [104, 188, 252],
+};
+const SUFFIX_MAX_W = 96;
 
 const THEMES = {
   light: {
@@ -64,22 +79,65 @@ const THEMES = {
 // ---------------------------------------------------------------------------
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 const pad2 = (n) => String(n).padStart(2, '0');
 const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+const unique = (values) => [...new Set(values)];
 
-function formatDate({ year, month, day }) {
-  return `${year}-${MONTHS[month]}-${pad2(day)}`;
+function formatEntry({ year, month, day, suffix }) {
+  return `${year}-${MONTHS[month]}-${pad2(day)}${suffix ? `-${suffix}` : ''}`;
 }
 
-function parseDate(text) {
-  const m = /^(\d{4})-([A-Za-z]{3})-(\d{1,2})$/.exec(text.trim());
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = MONTHS.indexOf(m[2].toUpperCase());
-  const day = Number(m[3]);
-  if (year < YEAR_MIN || year > YEAR_MAX || month < 0) return null;
-  if (day < 1 || day > daysInMonth(year, month)) return null;
-  return { year, month, day };
+const weekdayOf = ({ year, month, day }) => WEEKDAYS[new Date(year, month, day).getDay()];
+
+function loadEntries(files) {
+  const entries = [];
+  for (const file of files) {
+    const m = FILE_RE.exec(file);
+    if (!m) continue;
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    if (month < 0 || month > 11 || day < 1 || day > daysInMonth(year, month)) continue;
+    entries.push({ year, month, day, suffix: m[4] || '', file });
+  }
+  const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  entries.sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || byName(a.suffix, b.suffix));
+  return entries;
+}
+
+// Values of one column, given the values selected in the columns to its left.
+function columnValues(level, parents) {
+  const keys = ['year', 'month', 'day', 'suffix'];
+  return unique(entries
+    .filter((e) => parents.every((v, k) => e[keys[k]] === v))
+    .map((e) => e[keys[level]]));
+}
+
+// Closest item to a value: numerically for dates, exact match for suffixes.
+function nearestIndex(items, value) {
+  if (typeof value !== 'number') return Math.max(0, items.indexOf(value));
+  let best = 0;
+  for (let i = 1; i < items.length; i++) {
+    if (Math.abs(items[i] - value) < Math.abs(items[best] - value)) best = i;
+  }
+  return best;
+}
+
+function entryNearestToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let best = null;
+  let bestDiff = Infinity;
+  for (const e of entries) {
+    // Ties go to the later project because entries are sorted ascending.
+    const diff = Math.abs(new Date(e.year, e.month, e.day) - today);
+    if (diff <= bestDiff) {
+      best = e;
+      bestDiff = diff;
+    }
+  }
+  return best;
 }
 
 // Resistance past the ends: approaches RUBBER_LIMIT asymptotically.
@@ -111,30 +169,58 @@ function roundRect(ctx, x, y, w, h, r) {
 // ---------------------------------------------------------------------------
 
 class Wheel {
-  constructor({ name, count, label, maxValid, x0, x1, cx, initial, onTick }) {
+  constructor({ name, format, onTick }) {
     this.name = name;
-    this.count = count;
-    this.label = label;
-    this.maxValid = maxValid || (() => count - 1);
-    this.x0 = x0;
-    this.x1 = x1;
-    this.cx = cx;
+    this.format = format;
     this.onTick = onTick;
+    this.items = [];
+    this.itemsKey = '';
+    this.x0 = 0;
+    this.x1 = 0;
+    this.cx = 0;
+    this.alpha = 1;
 
-    this.pos = initial;
-    this.target = initial;
+    this.pos = 0;
+    this.target = 0;
     this.v = 0;
     this.mode = 'idle'; // idle | drag | decay | spring
-    this.lastTick = initial;
+    this.lastTick = 0;
     this.samples = [];
+    this.dragStart = 0;
     this.wheelAccum = 0;
     this.wheelTime = 0;
   }
 
-  get max() { return this.count - 1; }
+  get count() { return this.items.length; }
+  get max() { return Math.max(0, this.count - 1); }
   get index() { return clamp(Math.round(this.pos), 0, this.max); }
+  get value() { return this.items[this.index]; }
   get moving() { return this.mode !== 'idle'; }
-  isValid(i) { return i <= this.maxValid(); }
+  label(i) { return this.format(this.items[i]); }
+
+  // Swaps in a new item list, keeping the wheel on the same (or nearest) value.
+  setItems(items) {
+    const key = items.join('\u0000');
+    if (key === this.itemsKey) return;
+    this.itemsKey = key;
+    const old = this.items;
+    this.items = items;
+
+    const index = old.length ? nearestIndex(items, old[clamp(Math.round(this.pos), 0, old.length - 1)]) : 0;
+    const shift = index - Math.round(this.pos);
+    this.pos += shift;
+    this.dragStart += shift;
+    for (const s of this.samples) s.raw += shift;
+    if (this.mode === 'spring') this.target = nearestIndex(items, old[this.target]);
+    if (this.mode === 'idle') this.pos = this.target = index;
+    this.lastTick = Math.round(this.pos);
+  }
+
+  jumpTo(i) {
+    this.pos = this.target = this.lastTick = clamp(i, 0, this.max);
+    this.v = 0;
+    this.mode = 'idle';
+  }
 
   springTo(i) {
     this.target = clamp(Math.round(i), 0, this.max);
@@ -287,66 +373,103 @@ darkQuery.addEventListener('change', (e) => {
   dirty = true;
 });
 
-const now = new Date();
-const initial = parseDate(decodeURIComponent(location.hash.slice(1))) ||
-  { year: clamp(now.getFullYear(), YEAR_MIN, YEAR_MAX), month: now.getMonth(), day: now.getDate() };
+const entries = loadEntries(window.PROJECT_FILES || []);
 
 const onTick = () => sound.tick();
 
-// Column layout inside the card: [year] - [month] - [day]
-const yearWheel = new Wheel({
-  name: 'year',
-  count: YEAR_MAX - YEAR_MIN + 1,
-  label: (i) => String(YEAR_MIN + i),
-  x0: 0, x1: 140, cx: 68,
-  initial: initial.year - YEAR_MIN,
-  onTick,
-});
-const monthWheel = new Wheel({
-  name: 'month',
-  count: 12,
-  label: (i) => MONTHS[i],
-  x0: 140, x1: 264, cx: 202,
-  initial: initial.month,
-  onTick,
-});
-const dayWheel = new Wheel({
-  name: 'day',
-  count: 31,
-  label: (i) => pad2(i + 1),
-  maxValid: () => daysInMonth(YEAR_MIN + yearWheel.index, monthWheel.index) - 1,
-  x0: 264, x1: CW, cx: 314,
-  initial: initial.day - 1,
-  onTick,
-});
-const wheels = [yearWheel, monthWheel, dayWheel];
-const SEPARATORS_X = [140, 264];
+// Columns: [year] - [month] - [day] - [suffix]; each lists only values that
+// have a project, given the columns to its left.
+const yearWheel = new Wheel({ name: 'year', format: String, onTick });
+const monthWheel = new Wheel({ name: 'month', format: (m) => MONTHS[m], onTick });
+const dayWheel = new Wheel({ name: 'day', format: pad2, onTick });
+const suffixWheel = new Wheel({ name: 'suffix', format: (s) => s || '—', onTick });
+const wheels = [yearWheel, monthWheel, dayWheel, suffixWheel];
+let separators = LAYOUT_3.seps.map((x) => ({ x, alpha: 1 }));
 
-function currentValue() {
-  const year = YEAR_MIN + yearWheel.index;
-  const month = monthWheel.index;
-  const day = Math.min(dayWheel.index + 1, daysInMonth(year, month));
-  return { year, month, day };
+// 0 = three columns, 1 = suffix column fully shown.
+let reveal = 0;
+let revealTarget = 0;
+
+// Animated jump to an entry (Today button, initial hash); cleared once reached.
+let pending = null;
+
+function refreshItems() {
+  for (let level = 0; level < wheels.length; level++) {
+    const parents = wheels.slice(0, level).map((w) => w.value);
+    wheels[level].setItems(columnValues(level, parents));
+  }
 }
 
-function setValue({ year, month, day }) {
-  yearWheel.springTo(year - YEAR_MIN);
-  monthWheel.springTo(month);
-  dayWheel.springTo(day - 1);
+function currentEntry() {
+  const [year, month, day, suffix] = wheels.map((w) => w.value);
+  return entries.find((e) => e.year === year && e.month === month && e.day === day && e.suffix === suffix);
 }
 
+function jumpToEntry(entry) {
+  const values = [entry.year, entry.month, entry.day, entry.suffix];
+  wheels.forEach((w, level) => {
+    refreshItems();
+    w.jumpTo(w.items.indexOf(values[level]));
+  });
+  refreshItems();
+}
+
+// Springs each column towards the entry once the columns to its left list it.
+function advancePending() {
+  if (!pending) return;
+  const values = [pending.year, pending.month, pending.day, pending.suffix];
+  let done = true;
+  for (let level = 0; level < wheels.length; level++) {
+    const w = wheels[level];
+    const i = w.items.indexOf(values[level]);
+    if (i < 0) {
+      done = false;
+      continue;
+    }
+    if (w.target !== i || w.mode === 'decay') w.springTo(i);
+    if (w.moving || w.index !== i) done = false;
+  }
+  if (done) pending = null;
+}
+
+function selectEntry(entry) {
+  if (entry) pending = entry;
+}
+
+function openEntry() {
+  const entry = currentEntry();
+  if (entry) window.location.href = PROJECT_DIR + encodeURIComponent(entry.file);
+}
+
+function applyLayout(r) {
+  wheels.forEach((w, i) => {
+    const a = LAYOUT_3.cols[i];
+    const b = LAYOUT_4.cols[i];
+    w.x0 = lerp(a[0], b[0], r);
+    w.x1 = lerp(a[1], b[1], r);
+    w.cx = lerp(a[2], b[2], r);
+  });
+  suffixWheel.alpha = r;
+  separators = LAYOUT_3.seps.map((x, i) => ({ x: lerp(x, LAYOUT_4.seps[i], r), alpha: i === 2 ? r : 1 }));
+}
+
+const visibleWheels = () => (revealTarget ? wheels : wheels.slice(0, 3));
+
+const BUTTON_W = 112;
 const buttons = [
   {
     label: () => 'Today',
-    x: 0, y: BUTTONS_TOP, w: 170, h: BUTTON_H,
-    action: () => {
-      const d = new Date();
-      setValue({ year: clamp(d.getFullYear(), YEAR_MIN, YEAR_MAX), month: d.getMonth(), day: d.getDate() });
-    },
+    x: 0, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
+    action: () => selectEntry(entryNearestToday()),
   },
   {
-    label: () => (sound.enabled ? 'Sound: On' : 'Sound: Off'),
-    x: CW - 170, y: BUTTONS_TOP, w: 170, h: BUTTON_H,
+    label: () => 'Open',
+    x: (CW - BUTTON_W) / 2, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
+    action: openEntry,
+  },
+  {
+    label: () => (sound.enabled ? 'Sound On' : 'Sound Off'),
+    x: CW - BUTTON_W, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
     action: () => {
       sound.enabled = !sound.enabled;
       if (sound.enabled) sound.tick();
@@ -385,8 +508,12 @@ function toLocal(e) {
 }
 
 const inPicker = (p) => p.x >= 0 && p.x <= CW && p.y >= PICKER_TOP && p.y <= PICKER_TOP + PICKER_H;
-const wheelAt = (p) => (inPicker(p) ? wheels.find((w) => p.x >= w.x0 && p.x <= w.x1) : null);
-const buttonAt = (p) => buttons.find((b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+const wheelAt = (p) => (entries.length && inPicker(p)
+  ? visibleWheels().find((w) => p.x >= w.x0 && p.x <= w.x1)
+  : null);
+const buttonAt = (p) => (entries.length
+  ? buttons.find((b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h)
+  : null);
 
 // ---------------------------------------------------------------------------
 // Drawing
@@ -399,29 +526,61 @@ function draw() {
   ctx.translate(view.ox, view.oy);
   ctx.scale(view.scale, view.scale);
 
+  if (!entries.length) {
+    drawEmpty();
+    return;
+  }
   drawReadout();
   drawPicker();
   drawButtons();
 }
 
+function drawEmpty() {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = theme.text;
+  ctx.font = `700 32px ${FONT}`;
+  ctx.fillText('No projects', CW / 2, TOTAL_H / 2 - 40);
+  ctx.fillStyle = theme.secondary;
+  ctx.font = `400 16px ${FONT}`;
+  ctx.fillText('Add files named yyyy-mm-dd[-suffix].html', CW / 2, TOTAL_H / 2 + 4);
+  ctx.fillText('to projects/, then run', CW / 2, TOTAL_H / 2 + 28);
+  ctx.font = `500 16px ui-monospace, Menlo, Consolas, monospace`;
+  ctx.fillText('node build-projects.js', CW / 2, TOTAL_H / 2 + 56);
+}
+
 function drawReadout() {
-  const value = currentValue();
-  const weekday = WEEKDAYS[new Date(value.year, value.month, value.day).getDay()];
+  const entry = currentEntry();
+  if (!entry) return;
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
   ctx.fillStyle = theme.secondary;
   ctx.font = `600 13px ${FONT}`;
-  ctx.fillText('SELECTED DATE', CW / 2, 14);
+  ctx.fillText('SELECTED PROJECT', CW / 2, 14);
 
   ctx.fillStyle = theme.text;
   ctx.font = `700 44px ${FONT}`;
-  ctx.fillText(formatDate(value), CW / 2, 56);
+  ctx.fillText(formatEntry({ ...entry, suffix: '' }), CW / 2, 56);
 
   ctx.fillStyle = theme.secondary;
   ctx.font = `400 17px ${FONT}`;
-  ctx.fillText(weekday, CW / 2, 94);
+  const detail = entry.suffix ? `${weekdayOf(entry)} · ${entry.suffix}` : weekdayOf(entry);
+  ctx.fillText(fitText(detail, CW), CW / 2, 94);
+}
+
+// Shortens text with an ellipsis to fit maxW at the current font.
+function fitText(text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (ctx.measureText(`${text.slice(0, mid)}…`).width <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return `${text.slice(0, lo)}…`;
 }
 
 function drawPicker() {
@@ -465,13 +624,16 @@ function drawPicker() {
   ctx.clip();
   ctx.fillStyle = theme.text;
   for (const w of wheels) drawWheelRows(w, cy, () => 1);
-  ctx.globalAlpha = 1;
   ctx.font = `500 23px ${FONT}`;
-  for (const x of SEPARATORS_X) ctx.fillText('-', x, cy - 1);
+  for (const s of separators) {
+    ctx.globalAlpha = s.alpha;
+    ctx.fillText('-', s.x, cy - 1);
+  }
+  ctx.globalAlpha = 1;
   ctx.restore();
 
   if (keyboardFocus) {
-    const w = wheels[focusCol];
+    const w = visibleWheels()[focusCol];
     ctx.strokeStyle = theme.accent;
     ctx.lineWidth = 2;
     const x0 = Math.max(w.x0, band.x) + 4;
@@ -482,17 +644,19 @@ function drawPicker() {
 }
 
 function drawWheelRows(w, cy, alphaFor) {
+  if (w.alpha <= 0.01) return;
   const from = Math.max(0, Math.floor(w.pos - 5));
   const to = Math.min(w.max, Math.ceil(w.pos + 5));
   for (let i = from; i <= to; i++) {
     const angle = (i - w.pos) * ROW_STEP;
     if (Math.abs(angle) >= Math.PI / 2) continue;
     const c = Math.cos(angle);
-    ctx.globalAlpha = alphaFor(c) * (w.isValid(i) ? 1 : 0.3);
+    ctx.globalAlpha = alphaFor(c) * w.alpha;
     ctx.save();
     ctx.translate(w.cx, cy + RADIUS * Math.sin(angle));
     ctx.scale(1, c);
-    ctx.fillText(w.label(i), 0, 0);
+    const text = w === suffixWheel ? fitText(w.label(i), SUFFIX_MAX_W) : w.label(i);
+    ctx.fillText(text, 0, 0);
     ctx.restore();
   }
   ctx.globalAlpha = 1;
@@ -540,7 +704,8 @@ canvas.addEventListener('pointerdown', (e) => {
 
   const w = wheelAt(p);
   if (!w) return;
-  focusCol = wheels.indexOf(w);
+  pending = null;
+  focusCol = visibleWheels().indexOf(w);
   w.beginDrag(p.y, e.timeStamp);
   drag = { wheel: w, id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, moved: 0 };
   canvas.setPointerCapture(e.pointerId);
@@ -609,27 +774,36 @@ canvas.addEventListener('wheel', (e) => {
   let dy = e.deltaY;
   if (e.deltaMode === 1) dy *= 16;
   else if (e.deltaMode === 2) dy *= PICKER_H;
-  focusCol = wheels.indexOf(w);
+  pending = null;
+  focusCol = visibleWheels().indexOf(w);
   w.scrollBy(dy, e.timeStamp);
   dirty = true;
 }, { passive: false });
 
 canvas.addEventListener('keydown', (e) => {
+  if (!entries.length) return;
   sound.unlock();
-  const w = wheels[focusCol];
+  const cols = visibleWheels();
+  focusCol = Math.min(focusCol, cols.length - 1);
+  const w = cols[focusCol];
   const base = w.mode === 'spring' ? w.target : w.index;
+  const spin = (i) => {
+    pending = null;
+    w.springTo(i);
+  };
   let handled = true;
   switch (e.key) {
-    case 'ArrowUp': w.springTo(base - 1); break;
-    case 'ArrowDown': w.springTo(base + 1); break;
-    case 'PageUp': w.springTo(base - 5); break;
-    case 'PageDown': w.springTo(base + 5); break;
-    case 'Home': w.springTo(0); break;
-    case 'End': w.springTo(w === dayWheel ? w.maxValid() : w.max); break;
-    case 'ArrowLeft': focusCol = (focusCol + 2) % 3; break;
-    case 'ArrowRight': focusCol = (focusCol + 1) % 3; break;
+    case 'ArrowUp': spin(base - 1); break;
+    case 'ArrowDown': spin(base + 1); break;
+    case 'PageUp': spin(base - 5); break;
+    case 'PageDown': spin(base + 5); break;
+    case 'Home': spin(0); break;
+    case 'End': spin(w.max); break;
+    case 'ArrowLeft': focusCol = (focusCol + cols.length - 1) % cols.length; break;
+    case 'ArrowRight': focusCol = (focusCol + 1) % cols.length; break;
+    case 'Enter': openEntry(); break;
     case 't': case 'T': buttons[0].action(); break;
-    case 'm': case 'M': buttons[1].action(); break;
+    case 'm': case 'M': buttons[2].action(); break;
     default: handled = false;
   }
   if (handled) {
@@ -651,14 +825,15 @@ window.addEventListener('resize', resize);
 // ---------------------------------------------------------------------------
 
 function commit() {
-  const value = currentValue();
-  const text = formatDate(value);
+  const entry = currentEntry();
+  if (!entry) return;
+  const text = formatEntry(entry);
   if (text === committed) return;
   committed = text;
   history.replaceState(null, '', `#${text}`);
-  document.title = `${text} · Date Selector`;
-  live.textContent = `${text}, ${WEEKDAYS[new Date(value.year, value.month, value.day).getDay()]}`;
-  canvas.dispatchEvent(new CustomEvent('datechange', { detail: { ...value, text } }));
+  document.title = `${text} · Projects`;
+  live.textContent = `${text}, ${weekdayOf(entry)}`;
+  canvas.dispatchEvent(new CustomEvent('datechange', { detail: { ...entry, text } }));
 }
 
 let lastFrame = performance.now();
@@ -669,14 +844,21 @@ function frame(t) {
   for (const w of wheels) {
     if (w.step(dt)) dirty = true;
   }
+  refreshItems();
+  advancePending();
 
-  // Like iOS: once year and month settle, roll an impossible day (e.g. FEB-31) back.
-  if (!yearWheel.moving && !monthWheel.moving && !dayWheel.moving &&
-      dayWheel.index > dayWheel.maxValid()) {
-    dayWheel.springTo(dayWheel.maxValid());
+  // Only show or hide the suffix column once the date has settled, so it
+  // doesn't flicker in and out while flicking past dates.
+  const dateSettled = !yearWheel.moving && !monthWheel.moving && !dayWheel.moving;
+  if (dateSettled) revealTarget = suffixWheel.count > 1 ? 1 : 0;
+  if (Math.abs(reveal - revealTarget) > 0.001) {
+    reveal += (revealTarget - reveal) * (1 - Math.exp(-REVEAL_RATE * dt));
+    if (Math.abs(reveal - revealTarget) <= 0.001) reveal = revealTarget;
+    applyLayout(reveal);
+    dirty = true;
   }
 
-  if (wheels.every((w) => !w.moving)) commit();
+  if (!pending && wheels.every((w) => !w.moving)) commit();
 
   if (dirty) {
     draw();
@@ -685,6 +867,13 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
+if (entries.length) {
+  const hash = decodeURIComponent(location.hash.slice(1)).toUpperCase();
+  const start = entries.find((e) => formatEntry(e).toUpperCase() === hash) || entryNearestToday();
+  jumpToEntry(start);
+  revealTarget = reveal = suffixWheel.count > 1 ? 1 : 0;
+}
+applyLayout(reveal);
 resize();
 draw();
 requestAnimationFrame(frame);
