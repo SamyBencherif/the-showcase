@@ -319,7 +319,6 @@ class Wheel {
 // ---------------------------------------------------------------------------
 
 const sound = {
-  enabled: true,
   ctx: null,
   buffer: null,
   lastAt: 0,
@@ -341,7 +340,7 @@ const sound = {
   },
 
   tick() {
-    if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+    if (!this.ctx || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;
     if (now - this.lastAt < 0.03) return;
     this.lastAt = now;
@@ -390,9 +389,6 @@ let separators = LAYOUT_3.seps.map((x) => ({ x, alpha: 1 }));
 let reveal = 0;
 let revealTarget = 0;
 
-// Animated jump to an entry (Today button, initial hash); cleared once reached.
-let pending = null;
-
 function refreshItems() {
   for (let level = 0; level < wheels.length; level++) {
     const parents = wheels.slice(0, level).map((w) => w.value);
@@ -414,28 +410,6 @@ function jumpToEntry(entry) {
   refreshItems();
 }
 
-// Springs each column towards the entry once the columns to its left list it.
-function advancePending() {
-  if (!pending) return;
-  const values = [pending.year, pending.month, pending.day, pending.suffix];
-  let done = true;
-  for (let level = 0; level < wheels.length; level++) {
-    const w = wheels[level];
-    const i = w.items.indexOf(values[level]);
-    if (i < 0) {
-      done = false;
-      continue;
-    }
-    if (w.target !== i || w.mode === 'decay') w.springTo(i);
-    if (w.moving || w.index !== i) done = false;
-  }
-  if (done) pending = null;
-}
-
-function selectEntry(entry) {
-  if (entry) pending = entry;
-}
-
 function openEntry() {
   const entry = currentEntry();
   if (entry) window.location.href = PROJECT_DIR + encodeURIComponent(entry.file);
@@ -455,25 +429,12 @@ function applyLayout(r) {
 
 const visibleWheels = () => (revealTarget ? wheels : wheels.slice(0, 3));
 
-const BUTTON_W = 112;
+const BUTTON_W = 170;
 const buttons = [
-  {
-    label: () => 'Today',
-    x: 0, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
-    action: () => selectEntry(entryNearestToday()),
-  },
   {
     label: () => 'Open',
     x: (CW - BUTTON_W) / 2, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
     action: openEntry,
-  },
-  {
-    label: () => (sound.enabled ? 'Sound On' : 'Sound Off'),
-    x: CW - BUTTON_W, y: BUTTONS_TOP, w: BUTTON_W, h: BUTTON_H,
-    action: () => {
-      sound.enabled = !sound.enabled;
-      if (sound.enabled) sound.tick();
-    },
   },
 ];
 
@@ -704,7 +665,6 @@ canvas.addEventListener('pointerdown', (e) => {
 
   const w = wheelAt(p);
   if (!w) return;
-  pending = null;
   focusCol = visibleWheels().indexOf(w);
   w.beginDrag(p.y, e.timeStamp);
   drag = { wheel: w, id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, moved: 0 };
@@ -774,7 +734,6 @@ canvas.addEventListener('wheel', (e) => {
   let dy = e.deltaY;
   if (e.deltaMode === 1) dy *= 16;
   else if (e.deltaMode === 2) dy *= PICKER_H;
-  pending = null;
   focusCol = visibleWheels().indexOf(w);
   w.scrollBy(dy, e.timeStamp);
   dirty = true;
@@ -787,10 +746,7 @@ canvas.addEventListener('keydown', (e) => {
   focusCol = Math.min(focusCol, cols.length - 1);
   const w = cols[focusCol];
   const base = w.mode === 'spring' ? w.target : w.index;
-  const spin = (i) => {
-    pending = null;
-    w.springTo(i);
-  };
+  const spin = (i) => w.springTo(i);
   let handled = true;
   switch (e.key) {
     case 'ArrowUp': spin(base - 1); break;
@@ -802,8 +758,6 @@ canvas.addEventListener('keydown', (e) => {
     case 'ArrowLeft': focusCol = (focusCol + cols.length - 1) % cols.length; break;
     case 'ArrowRight': focusCol = (focusCol + 1) % cols.length; break;
     case 'Enter': openEntry(); break;
-    case 't': case 'T': buttons[0].action(); break;
-    case 'm': case 'M': buttons[2].action(); break;
     default: handled = false;
   }
   if (handled) {
@@ -845,7 +799,6 @@ function frame(t) {
     if (w.step(dt)) dirty = true;
   }
   refreshItems();
-  advancePending();
 
   // Only show or hide the suffix column once the date has settled, so it
   // doesn't flicker in and out while flicking past dates.
@@ -858,7 +811,7 @@ function frame(t) {
     dirty = true;
   }
 
-  if (!pending && wheels.every((w) => !w.moving)) commit();
+  if (wheels.every((w) => !w.moving)) commit();
 
   if (dirty) {
     draw();
