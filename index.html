@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Date Selector</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #f2f2f7;
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #000; }
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      touch-action: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="picker" tabindex="0" role="application"
+          aria-label="Date selector. Use left and right arrows to choose year, month or day, and up and down arrows to change it. Press T for today."></canvas>
+  <output id="live" class="sr-only" aria-live="polite"></output>
+  <script src="datepicker.js"></script>
+</body>
+</html>
