@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Particle System</title>
+  <!-- Port of 2020-09-particleSys.py (Pythonista scene). Coloured shapes spray
+       from the crosshair and fall with the device's tilt. Touch to move the
+       crosshair. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #fff">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+    const { cos, sin, PI: pi } = Math;
+
+    const COLORS = [
+      [0.84, 0.22, 0.22],
+      [0.92, 0.95, 0.23],
+      [0.21, 0.27, 0.95],
+      [0.22, 0.91, 0.28],
+    ];
+
+    // Stand-in for Pythonista's motion module: gravity as (x, y) in g, in
+    // screen coordinates with y up. Devices without a motion sensor, such as
+    // most computers, get the reading of a phone held upright.
+    const motion = {
+      gravity: [0, -1],
+
+      startUpdates() {
+        window.addEventListener('devicemotion', (e) => {
+          const a = e.accelerationIncludingGravity;
+          if (!a || a.x === null) return;
+          // The sensor reports the push against gravity, in m/s², along the
+          // device's natural axes; turn it to match the screen's rotation.
+          const gx = -a.x / 9.81;
+          const gy = -a.y / 9.81;
+          const angle = ((screen.orientation && screen.orientation.angle) || 0) * pi / 180;
+          this.gravity = [gx * cos(angle) - gy * sin(angle), gx * sin(angle) + gy * cos(angle)];
+        });
+      },
+
+      // iOS only delivers motion events after permission is granted from a tap.
+      requestPermission() {
+        if (typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {
+          DeviceMotionEvent.requestPermission().catch(() => {});
+        }
+      },
+
+      getGravity() {
+        return this.gravity;
+      },
+    };
+
+    function rot(point, angle) {
+      return {
+        x: point.x * cos(angle) - point.y * sin(angle),
+        y: point.y * cos(angle) + point.x * sin(angle),
+      };
+    }
+
+    function rPolyMesh(n, radius = 10) {
+      const M = [];
+      for (let i = 0; i < n; i++) {
+        M.push({ x: radius * cos(i * 2 * pi / n), y: radius * sin(i * 2 * pi / n) });
+      }
+      return M;
+    }
+
+    let ctx;
+
+    class Particle {
+      constructor(pos, vel, rotspeed, mesh, color) {
+        this.pos = { ...pos };
+        this.vel = vel;
+        this.angle = 0;
+        this.rotspeed = rotspeed;
+        this.mesh = mesh;
+        this.color = color;
+        this.age = 0;
+      }
+
+      update(dt) {
+        // The original fills a wedge from the centre to each edge and outlines
+        // the edge. The wedges together make the whole polygon, so it is
+        // filled in one go: separately anti-aliased wedges leave seams.
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.fillStyle = rgb(...this.color);
+        ctx.beginPath();
+        for (const point of this.mesh) {
+          const A = rot(point, this.angle);
+          ctx.lineTo(A.x + this.pos.x, A.y + this.pos.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        const g = motion.getGravity();
+        this.vel.x += 500 * g[0] * dt;
+        this.vel.y += 500 * g[1] * dt;
+
+        this.pos.x += this.vel.x * dt;
+        this.pos.y += this.vel.y * dt;
+        this.angle += this.rotspeed * dt;
+        this.age += dt;
+
+        return this.age < 4;
+      }
+    }
+
+    class ParticleEmitter {
+      constructor(pos, interval, gameobjs) {
+        this.pos = pos;
+        this.gameobjs = gameobjs;
+        this.interval = interval;
+        this.clock = 0;
+      }
+
+      update(dt) {
+        // draw crosshair
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x - 10, this.pos.y);
+        ctx.lineTo(this.pos.x + 10, this.pos.y);
+        ctx.moveTo(this.pos.x, this.pos.y - 10);
+        ctx.lineTo(this.pos.x, this.pos.y + 10);
+        ctx.stroke();
+
+        this.clock += dt;
+        if (this.clock > this.interval) {
+          this.clock = 0;
+          this.gameobjs.push(new Particle(
+            this.pos,
+            { x: 2 * (-100 + 200 * r()), y: 2 * (-100 + 200 * r()) },
+            5 * (-1 + 2 * r()),
+            rPolyMesh(3 + Math.trunc(10 * r()), 5 + 10 * r()),
+            COLORS[Math.floor(r() * COLORS.length)],
+          ));
+        }
+
+        return true;
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        motion.startUpdates();
+
+        this.gameObjects = [];
+
+        this.pe = new ParticleEmitter({ x: this.size.w / 2, y: this.size.h / 2 }, 0.05, this.gameObjects);
+
+        this.gameObjects.push(this.pe);
+      },
+
+      update() {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        // Objects that return false are removed, after drawing one last time.
+        let i = 0;
+        while (i < this.gameObjects.length) {
+          if (!this.gameObjects[i].update(this.dt)) {
+            this.gameObjects.splice(i, 1);
+            i -= 1;
+          }
+          i += 1;
+        }
+      },
+
+      touchEv(touch) {
+        this.pe.pos = touch.location;
+      },
+
+      touchBegan(touch) {
+        motion.requestPermission();
+        this.touchEv(touch, 'begin');
+      },
+
+      touchMoved(touch) {
+        this.touchEv(touch, 'moved');
+      },
+
+      touchEnded(touch) {
+        this.touchEv(touch, 'ended');
+      },
+    });
+  </script>
+</body>
+</html>

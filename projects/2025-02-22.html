@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>2025-02-22</title>
+  <!-- Port of 2025-02-22.py (Pythonista scene). Tap to add circles, each
+       joined to all the others. -->
+  <script src="lib/scene.js"></script>
+  <script src="lib/python-random.js"></script>
+</head>
+<body style="background: #fff">
+  <script>
+    'use strict';
+
+    runScene({
+      setup() {
+        this.points = [];
+      },
+
+      update() {
+        const { ctx } = this;
+
+        // Reseeded every frame so each circle keeps its size; Python's seeded
+        // random gives the same sizes as the original.
+        const random = pythonRandom(0);
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        ctx.strokeStyle = rgb(0.07, 0.07, 0.07);
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        for (const pointA of this.points) {
+          for (const pointB of this.points) {
+            if (pointA !== pointB) {
+              ctx.moveTo(...pointA);
+              ctx.lineTo(...pointB);
+            }
+          }
+        }
+        ctx.stroke();
+
+        // Pythonista's default fill is white; the stroke set above outlines it.
+        ctx.fillStyle = '#fff';
+        for (const point of this.points) {
+          const r = 50 * random();
+          ctx.beginPath();
+          ctx.arc(point[0], point[1], r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      },
+
+      touchBegan(touch) {
+        this.points.push([touch.location.x, touch.location.y]);
+      },
+    });
+  </script>
+</body>
+</html>

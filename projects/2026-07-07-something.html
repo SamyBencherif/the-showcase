@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Something</title>
+  <!-- Port of 2026-07-07-something.py (Pythonista scene): a yellow ball on a
+       spring with a dotted line that turns to follow it. Drag the ball. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #f0f0f0">
+  <script>
+    'use strict';
+
+    const { atan2, cos, sin, hypot, PI: pi } = Math;
+    let ctx;
+
+    function dottedLine(x1, y1, x2, y2, perc = 0.5, len = 20) {
+      const L = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5;
+      const D = [(x2 - x1) / L, (y2 - y1) / L];
+
+      let x = x1;
+      let y = y1;
+
+      ctx.beginPath();
+      for (let i = 0; i < 1000; i++) {
+        if (!(Math.min(x1, x2) <= x && x <= Math.max(x1, x2) && Math.min(y1, y2) <= y && y <= Math.max(y1, y2))) break;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + D[0] * len * perc, y + D[1] * len * perc);
+        x += D[0] * len;
+        y += D[1] * len;
+      }
+      ctx.stroke();
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        this.circle = { x: 0, y: 0 };
+        this.cv = { x: 0, y: 0 };
+      },
+
+      update() {
+        const { w, h } = this.size;
+        const { circle, cv } = this;
+
+        ctx.fillStyle = rgb(0.94, 0.94, 0.94);
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = rgb(0.12, 0.12, 0.12);
+        ctx.lineWidth = 1;
+
+        // Near the centre the line points straight up or down; further out it
+        // turns to point at the ball.
+        const I = 1 - 1 / (1 + (hypot(circle.x, circle.y) / 10) ** 4);
+        let np = pi / 2;
+        if (Math.abs(atan2(circle.y, circle.x) - pi / 2) > Math.abs(atan2(circle.y, circle.x) + pi / 2)) {
+          np = -pi / 2;
+        }
+        const a = atan2(circle.y, circle.x) * I + np * (1 - I);
+
+        const l = h / 4;
+        dottedLine(w / 2 - cos(a) * l, h / 2 - sin(a) * l, w / 2 + cos(a) * l, h / 2 + sin(a) * l);
+
+        ctx.fillStyle = rgb(0.97, 0.78, 0.11);
+        ctx.beginPath();
+        ctx.arc(w / 2 + circle.x, h / 2 + circle.y, 50, 0, 2 * pi);
+        ctx.fill();
+
+        circle.x += cv.x * this.dt;
+        circle.y += cv.y * this.dt;
+        cv.x -= circle.x * this.dt;
+        cv.y -= circle.y * this.dt;
+        cv.x *= 0.99;
+        cv.y *= 0.99;
+      },
+
+      touchMoved(touch) {
+        const { circle, cv } = this;
+        const dx = touch.location.x - circle.x - this.size.w / 2;
+        const dy = touch.location.y - circle.y - this.size.h / 2;
+        if (hypot(dx, dy) <= 50) {
+          const mx = touch.location.x - touch.prevLocation.x;
+          const my = touch.location.y - touch.prevLocation.y;
+          circle.x += mx;
+          circle.y += my;
+          cv.x += mx;
+          cv.y += my;
+        }
+      },
+    });
+  </script>
+</body>
+</html>

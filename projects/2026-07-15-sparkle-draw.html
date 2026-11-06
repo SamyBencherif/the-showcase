@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sparkle Draw</title>
+  <!-- Port of 2026-07-15-sparkle-draw.py (Pythonista scene). Drag to leave
+       sparkle emitters that keep sparkling wherever you drew. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #12121f">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+    let ctx;
+
+    class Sparkle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        const R = 50 * r();
+        const A = r() * 6.29;
+        this.vx = R * Math.cos(A);
+        this.vy = R * Math.sin(A);
+        this.r = 3 * r();
+        this.a = r();
+        this.lifespan = 0.6 * r();
+      }
+
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vy -= 300 * dt;
+        this.lifespan -= dt;
+
+        if (this.lifespan > 0) {
+          ctx.fillStyle = rgb(1.0, 0.95, 0.76, this.a);
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Emitters share the sparkle list and are never removed, so everywhere you
+    // drew keeps sparkling.
+    class Emitter {
+      constructor(x, y, s) {
+        this.x = x;
+        this.y = y;
+        this.s = s;
+      }
+
+      update() {
+        this.s.push(new Sparkle(this.x, this.y));
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        this.s = [];
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.07, 0.07, 0.12);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        // Removed in place: emitters hold a reference to this same list.
+        let kept = 0;
+        for (const s of this.s) {
+          if (s.y >= 0) this.s[kept++] = s;
+        }
+        this.s.length = kept;
+
+        for (const t of this.touches.values()) {
+          for (let i = 0; i < 5; i++) this.s.push(new Emitter(t.location.x, t.location.y, this.s));
+        }
+
+        // As in Python, sparkles added during this loop are updated in it too.
+        for (const s of this.s) s.update(this.dt);
+      },
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Movie Squares</title>
+  <!-- Port of 2026-07-06-movie-squares.py (Pythonista scene).
+       Tap to send the squares gliding to new colours, sizes and places. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #1c1c1c">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+    let ctx;
+
+    // Eases every property a tenth of the way to its target each frame.
+    class Square {
+      constructor() {
+        this.f = [0.94, 0.94, 0.94, 1];
+        this.tf = this.f;
+
+        this.r = 0;
+        this.tr = 0;
+
+        this.s = 100;
+        this.ts = 100;
+
+        this.x = 0;
+        this.y = 0;
+        this.tx = 0;
+        this.ty = 0;
+      }
+
+      update() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.r * Math.PI / 180);
+
+        ctx.fillStyle = rgb(...this.f);
+        ctx.fillRect(-this.s / 2, -this.s / 2, this.s, this.s);
+
+        this.f = this.f.map((v, i) => 0.9 * v + 0.1 * this.tf[i]);
+
+        this.r = 0.9 * this.r + 0.1 * this.tr;
+
+        this.s = 0.9 * this.s + 0.1 * this.ts;
+
+        this.x = 0.9 * this.x + 0.1 * this.tx;
+        this.y = 0.9 * this.y + 0.1 * this.ty;
+
+        ctx.restore();
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        this.squares = [];
+        for (let i = 0; i < 10; i++) this.squares.push(new Square());
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.11, 0.11, 0.11);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        ctx.save();
+        ctx.translate(this.size.w / 2, this.size.h / 2);
+
+        for (const square of this.squares) square.update();
+
+        ctx.restore();
+      },
+
+      touchBegan() {
+        for (const square of this.squares) {
+          square.tf = [r(), r(), r(), r()];
+          square.tr = r() * 360;
+          square.ts = r() * 400;
+          square.tx = r() * this.size.w - this.size.w / 2;
+          square.ty = r() * this.size.h - this.size.h / 2;
+        }
+      },
+    });
+  </script>
+</body>
+</html>

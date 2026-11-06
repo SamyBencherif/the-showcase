@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Movie Squares 2</title>
+  <!-- Port of 2026-07-07-movie-squares-2.py (Pythonista scene). Tap a grid cell
+       to scatter the squares into that cell's own arrangement; tap again to
+       bring them back. -->
+  <script src="lib/scene.js"></script>
+  <script src="lib/python-random.js"></script>
+</head>
+<body style="background: #1c1c1c">
+  <script>
+    'use strict';
+
+    // Each tap reseeds the random numbers from the tapped grid cell, so a cell
+    // always gives the same arrangement. Python's seeded random makes it the
+    // same arrangement as the original.
+    let r = Math.random;
+    const s = (seed) => { r = pythonRandom(seed); };
+
+    const bs = 100;
+    const sb = true;
+
+    let ctx;
+
+    // Eases every property a tenth of the way to its target each frame.
+    class Square {
+      constructor() {
+        this.f = [0.94, 0.94, 0.94, 1];
+        this.tf = this.f;
+
+        this.r = 0;
+        this.tr = 0;
+
+        this.s = 100;
+        this.ts = 100;
+
+        this.x = 0;
+        this.y = 0;
+        this.tx = 0;
+        this.ty = 0;
+      }
+
+      update() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.r * Math.PI / 180);
+
+        ctx.fillStyle = rgb(...this.f);
+        ctx.fillRect(-this.s / 2, -this.s / 2, this.s, this.s);
+
+        this.f = this.f.map((v, i) => 0.9 * v + 0.1 * this.tf[i]);
+
+        this.r = 0.9 * this.r + 0.1 * this.tr;
+
+        this.s = 0.9 * this.s + 0.1 * this.ts;
+
+        this.x = 0.9 * this.x + 0.1 * this.tx;
+        this.y = 0.9 * this.y + 0.1 * this.ty;
+
+        ctx.restore();
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+
+        this.tc = 0;
+        this.sb = null;
+
+        this.squares = [];
+        for (let i = 0; i < 10; i++) this.squares.push(new Square());
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.11, 0.11, 0.11);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        ctx.save();
+        ctx.translate(this.size.w / 2, this.size.h / 2);
+
+        for (const square of this.squares) square.update();
+
+        ctx.restore();
+
+        if (sb) {
+          for (let x = 0; x < Math.trunc(this.size.w / bs) + 1; x++) {
+            for (let y = 0; y < Math.trunc(this.size.h / bs) + 1; y++) {
+              const selected = this.sb && this.sb[0] === y && this.sb[1] === x;
+              ctx.fillStyle = rgb(1, 1, 1, selected ? 0.4 : 0.1);
+              ctx.fillRect(1 + x * bs, 1 + y * bs, bs - 2, bs - 2);
+            }
+          }
+        }
+      },
+
+      touchBegan(touch) {
+        this.tc += 1;
+
+        const row = Math.floor(touch.location.y / bs);
+        const col = Math.floor(touch.location.x / bs);
+        this.sb = [row, col];
+        // Python formats these float divisions as e.g. "3.0 2.0".
+        s(`${row}.0 ${col}.0`);
+
+        if (!(this.tc % 2)) this.sb = null;
+
+        for (const square of this.squares) {
+          if (this.tc % 2) {
+            square.tf = [r(), r(), r(), r()];
+            square.tr = r() * 360;
+            square.ts = r() * 400;
+            square.tx = r() * this.size.w - this.size.w / 2;
+            square.ty = r() * this.size.h - this.size.h / 2;
+          } else {
+            square.tf = [1, 1, 1, 1];
+            square.tr = 0;
+            square.ts = 100;
+            square.tx = 0;
+            square.ty = 0;
+          }
+        }
+      },
+    });
+  </script>
+</body>
+</html>

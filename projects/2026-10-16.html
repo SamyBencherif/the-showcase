@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>2026-10-16</title>
+  <!-- Port of 2026-10-16.py (Pythonista scene). Swipe to fling the ball; it
+       bounces off the edges and changes colour with each swipe. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #333">
+  <script>
+    'use strict';
+
+    runScene({
+      setup() {
+        this.cs = [
+          '#ffd12d',
+          '#ff2323',
+          '#15e1ff',
+          '#152aff',
+        ];
+
+        this.ci = 0;
+
+        this.x = 0;
+        this.y = 0;
+        this.vx = 0;
+        this.vy = 0;
+      },
+
+      update() {
+        const { ctx } = this;
+        const { w, h } = this.size;
+
+        ctx.fillStyle = this.cs[this.ci];
+        ctx.beginPath();
+        ctx.arc(w / 2 + this.x, h / 2 + this.y, 25, 0, Math.PI * 2);
+        ctx.fill();
+
+        this.x += this.vx * this.dt;
+        this.y += this.vy * this.dt;
+
+        if (this.x > w / 2 - 25) this.vx = -Math.abs(this.vx);
+        if (this.x < -w / 2 + 25) this.vx = Math.abs(this.vx);
+        if (this.y > h / 2 - 25) this.vy = -Math.abs(this.vy);
+        if (this.y < -h / 2 + 25) this.vy = Math.abs(this.vy);
+      },
+
+      touchBegan(touch) {
+        this.touchStart = touch;
+      },
+
+      touchEnded(touch) {
+        this.vx = touch.location.x - this.touchStart.location.x;
+        this.vy = touch.location.y - this.touchStart.location.y;
+
+        this.ci += 1;
+        this.ci %= this.cs.length;
+      },
+    });
+  </script>
+</body>
+</html>

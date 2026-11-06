@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Orbitals</title>
+  <!-- Port of 2025-01-04-orbitals.py (Pythonista scene): particles orbiting a
+       centre of gravity. Drag to move the centre. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #1a1a1c">
+  <script>
+    'use strict';
+
+    let ctx;
+
+    class Particle {
+      constructor(pos) {
+        this.pos = pos;
+        this.vel = { x: 0, y: 0 };
+        this.acc = { x: 0, y: 0 };
+        this.color = [Math.random(), Math.random(), Math.random()];
+      }
+
+      draw(dt, particles) {
+        ctx.fillStyle = rgb(...this.color, 0.5);
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = rgb(...this.color, 1);
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        this.pos = { x: this.pos.x + this.vel.x * dt, y: this.pos.y + this.vel.y * dt };
+        this.vel = { x: this.vel.x + this.acc.x * dt, y: this.vel.y + this.acc.y * dt };
+
+        for (const particle of particles) {
+          if (particle === this) continue;
+          if (Math.hypot(particle.pos.x - this.pos.x, particle.pos.y - this.pos.y) < 6) {
+            particle.vel = { x: particle.pos.x - this.pos.x, y: particle.pos.y - this.pos.y };
+          }
+        }
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        const { w, h } = this.size;
+        this.gravityCenter = { x: w / 2, y: h / 2 };
+
+        this.particles = [
+          new Particle({ x: w / 2 + 10, y: h / 2 }),
+          new Particle({ x: w / 2 + 30, y: h / 2 }),
+          new Particle({ x: w / 2 + 60, y: h / 2 + 20 }),
+        ];
+
+        for (let i = 0; i < 100; i++) {
+          this.particles.push(new Particle({ x: Math.random() * w, y: Math.random() * h }));
+        }
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.1, 0.1, 0.11);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        for (const particle of this.particles) {
+          particle.draw(this.dt, this.particles);
+          particle.acc = {
+            x: this.gravityCenter.x - particle.pos.x,
+            y: this.gravityCenter.y - particle.pos.y,
+          };
+        }
+      },
+
+      touchMoved(touch) {
+        this.gravityCenter = touch.location;
+      },
+    });
+  </script>
+</body>
+</html>

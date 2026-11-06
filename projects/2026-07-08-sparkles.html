@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sparkles</title>
+  <!-- Port of 2026-07-08-sparkles.py (Pythonista scene).
+       Hold a touch to spray sparkles that fall away. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #12121f">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+    let ctx;
+
+    class Sparkle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        const R = 50 * r();
+        const A = r() * 6.29;
+        this.vx = R * Math.cos(A);
+        this.vy = R * Math.sin(A);
+        this.r = 3 * r();
+        this.a = r();
+      }
+
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vy -= 300 * dt;
+
+        ctx.fillStyle = rgb(1.0, 0.95, 0.76, this.a);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        this.s = [];
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.07, 0.07, 0.12);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        this.s = this.s.filter((s) => s.y >= 0);
+
+        for (const t of this.touches.values()) {
+          for (let i = 0; i < 5; i++) this.s.push(new Sparkle(t.location.x, t.location.y));
+        }
+
+        for (const s of this.s) s.update(this.dt);
+      },
+    });
+  </script>
+</body>
+</html>

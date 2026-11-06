@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bubbles</title>
+  <!-- Port of 2021-01-bubbles.py (Pythonista scene).
+       Tap bubbles to pop them; once they're all gone, new ones float in. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #f8fbff">
+  <script>
+    'use strict';
+
+    const { random, cos, sin, PI: pi, hypot } = Math;
+    const randint = (a, b) => a + Math.floor(random() * (b - a + 1));
+
+    const sharedData = {};
+
+    function randomColor() {
+      return [random(), random(), random(), 0.3];
+    }
+
+    let ctx;
+
+    class Bubble {
+      constructor() {
+        const { w, h } = sharedData.screenSize;
+        this.position = { x: random() * w, y: random() * h };
+        this.radius = randint(20, 50);
+        this.color = randomColor();
+
+        const magnitude = random() * 40;
+        const angle = random() * 2 * pi;
+        this.velocity = { x: magnitude * cos(angle), y: magnitude * sin(angle) };
+      }
+
+      update(dt) {
+        ctx.fillStyle = rgb(...this.color);
+        const pos = this.position;
+        const r = this.radius;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, 2 * pi);
+        ctx.fill();
+
+        this.position = { x: pos.x + this.velocity.x * dt, y: pos.y + this.velocity.y * dt };
+
+        const { w, h } = sharedData.screenSize;
+
+        if (this.position.x > w - r) this.velocity.x = -Math.abs(this.velocity.x);
+        if (this.position.x < r) this.velocity.x = Math.abs(this.velocity.x);
+
+        if (this.position.y > h - r) this.velocity.y = -Math.abs(this.velocity.y);
+        if (this.position.y < r) this.velocity.y = Math.abs(this.velocity.y);
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        sharedData.screenSize = this.size;
+
+        this.repopulate = false;
+        this.clock = 0;
+
+        this.bubbles = [];
+        for (let i = 0; i < 30; i++) this.bubbles.push(new Bubble());
+      },
+
+      update() {
+        ctx.fillStyle = '#f8fbff';
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        sharedData.screenSize = this.size;
+
+        if (this.bubbles.length === 0) this.repopulate = true;
+
+        if (this.repopulate) {
+          this.clock += this.dt;
+
+          if (this.clock > 0.1) {
+            this.bubbles.push(new Bubble());
+            this.clock = 0;
+          }
+
+          if (this.bubbles.length === 50) {
+            this.repopulate = false;
+            this.clock = 0;
+          }
+        }
+
+        for (const bubble of this.bubbles) {
+          bubble.update(this.dt);
+
+          for (const other of this.bubbles) {
+            const dx = bubble.position.x - other.position.x;
+            const dy = bubble.position.y - other.position.y;
+            if (bubble !== other && hypot(dx, dy) < bubble.radius + other.radius) {
+              // "bounce" velocities
+              const V = bubble.velocity;
+              bubble.velocity = other.velocity;
+              other.velocity = V;
+
+              // physically seperate bubbles
+              const resolution = 0.02;
+              bubble.position = {
+                x: bubble.position.x + (bubble.position.x - other.position.x) * resolution,
+                y: bubble.position.y + (bubble.position.y - other.position.y) * resolution,
+              };
+              other.position = {
+                x: other.position.x + (other.position.x - bubble.position.x) * resolution,
+                y: other.position.y + (other.position.y - bubble.position.y) * resolution,
+              };
+            }
+          }
+        }
+      },
+
+      touchBegan(touch) {
+        for (let i = this.bubbles.length - 1; i >= 0; i--) {
+          const b = this.bubbles[i];
+          if (hypot(touch.location.x - b.position.x, touch.location.y - b.position.y) < b.radius) {
+            this.bubbles.splice(i, 1);
+          }
+        }
+      },
+    });
+  </script>
+</body>
+</html>

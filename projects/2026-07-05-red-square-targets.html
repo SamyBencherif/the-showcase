@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Red Square Targets</title>
+  <!-- Port of 2026-07-05-red-square-targets.py (Pythonista scene): a shimmering
+       grid of red squares. Drag to mark squares; they light up yellow while you
+       touch and white afterwards where you passed an odd number of times. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #b00000">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+
+    const M = 1500;
+    const ss = 20;
+
+    class Square {
+      constructor(x, y) {
+        this.sx = x;
+        this.sy = y;
+        this.x = x;
+        this.y = y;
+        this.color = [r(), 0.1 * r(), 0.1 * r()];
+        this.tx = x + r() * M - M / 2;
+        this.ty = y + r() * M - M / 2;
+      }
+    }
+
+    runScene({
+      vrect(x, y, w, h) {
+        let c = 0;
+        for (const T of this.T) {
+          if (x < T.location.x && T.location.x < x + w && y < T.location.y && T.location.y < y + h) c += 1;
+        }
+
+        if (c % 2 && !this.m) {
+          this.ctx.fillStyle = rgb(1, 1, 1, 0.8);
+        } else if (c > 0 && this.m) {
+          this.ctx.fillStyle = rgb(0.92, 0.73, 0.08, 0.5);
+        }
+
+        this.ctx.fillRect(x, y, w, h);
+      },
+
+      setup() {
+        this.m = false;
+        this.T = [];
+        this.i = 0;
+        this.ti = 0;
+        this.s = [];
+        for (let x = 0; x < Math.trunc(this.size.w / ss) + 1; x++) {
+          for (let y = 0; y < Math.trunc(this.size.h / ss) + 1; y++) {
+            this.s.push(new Square(x * ss, y * ss));
+          }
+        }
+      },
+
+      update() {
+        const { ctx } = this;
+
+        this.ti = Math.sin(10 * this.t) * 0.01;
+
+        ctx.fillStyle = rgb(0.69, 0.0, 0.0);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        for (const s of this.s) {
+          ctx.fillStyle = rgb(...s.color);
+          this.vrect(s.x, s.y, ss, ss);
+
+          s.x = s.sx + (s.tx - s.sx) * this.i;
+          s.y = s.sy + (s.ty - s.sy) * this.i;
+        }
+
+        this.i = this.i * 0.9 + this.ti * 0.1;
+      },
+
+      touchBegan(touch) {
+        this.touchMoved(touch);
+        this.m = true;
+      },
+
+      touchMoved(touch) {
+        this.T.push(touch);
+      },
+
+      touchEnded() {
+        this.m = false;
+      },
+    });
+  </script>
+</body>
+</html>

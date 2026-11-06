@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Button City</title>
+  <!-- Port of 2025-01-02-button-city.py (Pythonista scene).
+       Tap each button to move on to the next screen of buttons. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #333">
+  <script>
+    'use strict';
+
+    let ctx;
+
+    class Button {
+      constructor(x, y, w, h, txt, fg, bg, target = null, scene = null) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        this.txt = txt;
+        this.fg = fg;
+        this.bg = bg;
+        this.target = target;
+        this.scene = scene;
+      }
+
+      draw() {
+        ctx.fillStyle = rgb(...this.bg);
+        ctx.strokeStyle = rgb(...this.fg);
+        ctx.lineWidth = 3;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        ctx.strokeRect(this.x, this.y, this.w, this.h);
+
+        // Pythonista's default text: 16pt Helvetica, centred. Flip it back
+        // upright inside the y-up coordinates.
+        ctx.save();
+        ctx.fillStyle = rgb(...this.fg);
+        ctx.font = '16px Helvetica, Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+        ctx.scale(1, -1);
+        ctx.fillText(this.txt, 0, 0);
+        ctx.restore();
+      }
+
+      touchEnded(touch) {
+        const { x, y } = touch.location;
+        if (x >= this.x && x < this.x + this.w && y >= this.y && y < this.y + this.h) {
+          if (this.target && this.scene) this.scene.buttons = this.target;
+        }
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+
+        this.buttonCityF = [
+          new Button(10, 300, 300, 100, 'woohoo', [0.27, 0.68, 0.74], [0.35, 0.35, 0.35], null, this),
+          new Button(10, 180, 300, 100, 'woohoo', [0.27, 0.68, 0.74], [0.35, 0.35, 0.35], null, this),
+          new Button(10, 420, 300, 100, 'woohoo', [0.27, 0.68, 0.74], [0.35, 0.35, 0.35], null, this),
+        ];
+
+        this.buttonCityE = [
+          new Button(10, 300, 300, 100, 'city!!!', [0.27, 0.68, 0.74], [0.35, 0.35, 0.35], this.buttonCityF, this),
+        ];
+
+        this.buttonCityD = [
+          new Button(10, 300, 300, 100, 'button', [0.61, 0.74, 0.33], [0.35, 0.35, 0.35], this.buttonCityE, this),
+        ];
+
+        this.buttonCityC = [
+          new Button(10, 300, 300, 100, 'is', [0.27, 0.68, 0.74], [0.35, 0.35, 0.35], this.buttonCityD, this),
+        ];
+
+        this.buttonCityB = [
+          new Button(100, 200, 300, 100, 'this', [0.31, 0.88, 0.2], [0.35, 0.35, 0.35], this.buttonCityC, this),
+        ];
+
+        this.buttonCityA = [
+          new Button(10, 10, 300, 100, 'world', [0.52, 0.22, 0.53], [0.86, 0.88, 0.46], this.buttonCityB, this),
+        ];
+
+        this.buttons = [
+          new Button(10, 10, 100, 100, 'hello', [0.14, 0.14, 0.21], [0.74, 0.88, 0.75], this.buttonCityA, this),
+        ];
+      },
+
+      update() {
+        for (const btn of this.buttons) btn.draw();
+      },
+
+      touchEnded(touch) {
+        for (const btn of this.buttons) btn.touchEnded(touch);
+      },
+    });
+  </script>
+</body>
+</html>

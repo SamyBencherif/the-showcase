@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tex</title>
+  <!-- Port of 2025-01-02-tex.py (Pythonista scene): a fan of lines whose
+       spacing swings back and forth over ten seconds. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #333">
+  <script>
+    'use strict';
+
+    function pingpong(t) {
+      t %= 10;
+      if (t > 5) t = 10 - t;
+      return t;
+    }
+
+    runScene({
+      update() {
+        const { ctx } = this;
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.beginPath();
+        for (let y = 0; y < Math.trunc(this.size.h); y++) {
+          ctx.moveTo(0, (1 + pingpong(this.t)) * y);
+          ctx.lineTo(this.size.w, 1.8 * y);
+        }
+        ctx.stroke();
+      },
+    });
+  </script>
+</body>
+</html>

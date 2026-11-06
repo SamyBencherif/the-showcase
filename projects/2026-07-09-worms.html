@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Worms</title>
+  <!-- Port of 2026-07-09-worms.py (Pythonista scene). Drag to draw scribbly
+       worms that drift apart and fade away over eight seconds. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #fff">
+  <script>
+    'use strict';
+
+    const r = Math.random;
+
+    runScene({
+      setup() {
+        // Each worm: { age, points: [{ x, y, vx, vy }] }
+        this.p = [];
+      },
+
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        ctx.lineWidth = 1;
+
+        this.p = this.p.filter((S) => S.age <= 8);
+
+        for (const S of this.p) {
+          S.age += this.dt;
+
+          ctx.strokeStyle = rgb(S.age / 7, S.age / 7, S.age / 7);
+          ctx.beginPath();
+          for (const point of S.points) ctx.lineTo(point.x, point.y);
+          ctx.stroke();
+        }
+
+        // Keep the newest 199 points of each worm.
+        for (const S of this.p) {
+          if (S.points.length >= 200) S.points = S.points.slice(-199);
+        }
+
+        for (const S of this.p) {
+          for (const point of S.points) {
+            point.x += point.vx * this.dt;
+            point.y += point.vy * this.dt;
+          }
+        }
+      },
+
+      touchBegan() {
+        this.p.push({ age: 0, points: [] });
+      },
+
+      touchMoved(touch) {
+        if (this.touches.size > 1) return;
+
+        const worm = this.p[this.p.length - 1];
+        for (let i = 0; i < 20; i++) {
+          worm.points.push({
+            x: touch.location.x - 5 + 10 * r(),
+            y: touch.location.y - 5 + 10 * r(),
+            vx: -5 + 10 * r(),
+            vy: -5 + 10 * r(),
+          });
+        }
+      },
+    });
+  </script>
+</body>
+</html>
