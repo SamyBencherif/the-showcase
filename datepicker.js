@@ -9,9 +9,15 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 
 // Project pages are named yyyy-mm-dd[-suffix].html and listed in projects.js,
 // which build-projects.js generates from the projects/ folder. Other files
-// there (such as original sources) are ignored.
+// there (such as original sources) are ignored. When the exact date isn't
+// known, the day, or the month and day, can be left out: yyyy-mm[-suffix].html
+// or yyyy[-suffix].html.
 const PROJECT_DIR = 'projects/';
-const FILE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:-(.+?))?\.html?$/i;
+const FILE_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?(?:-(.+?))?\.html?$/i;
+
+// Shown in place of an unknown month or day.
+const UNKNOWN_MONTH = '???';
+const UNKNOWN_DAY = '??';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", ' +
   '"Helvetica Neue", "Segoe UI", Roboto, Inter, system-ui, sans-serif';
@@ -40,15 +46,17 @@ const TOTAL_H = BUTTONS_TOP + BUTTON_H;
 const BAND_INSET = 8;
 
 // Column [x0, x1, cx] and separator positions, without and with the suffix column.
+// The suffix column is left-aligned, so its cx is where its text starts.
 const LAYOUT_3 = {
-  cols: [[0, 140, 68], [140, 264, 202], [264, 360, 314], [360, 360, 420]],
+  cols: [[0, 140, 68], [140, 264, 202], [264, 360, 314], [360, 360, 400]],
   seps: [140, 264, 360],
 };
 const LAYOUT_4 = {
-  cols: [[0, 104, 54], [104, 188, 146], [188, 252, 222], [252, 360, 304]],
-  seps: [104, 188, 252],
+  cols: [[0, 88, 46], [88, 160, 124], [160, 216, 190], [216, 360, 228]],
+  seps: [88, 160, 216],
 };
-const SUFFIX_MAX_W = 96;
+const SUFFIX_FONT_SIZE = 19;
+const SUFFIX_MAX_W = 124;
 
 const THEMES = {
   light: {
@@ -60,7 +68,6 @@ const THEMES = {
     accent: '#007aff',
     buttonBg: 'rgba(0, 122, 255, 0.10)',
     buttonBgActive: 'rgba(0, 122, 255, 0.22)',
-    shadow: 'rgba(0, 0, 0, 0.08)',
   },
   dark: {
     bg: '#000000',
@@ -71,7 +78,6 @@ const THEMES = {
     accent: '#0a84ff',
     buttonBg: 'rgba(10, 132, 255, 0.18)',
     buttonBgActive: 'rgba(10, 132, 255, 0.32)',
-    shadow: 'rgba(0, 0, 0, 0)',
   },
 };
 
@@ -85,11 +91,17 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 const unique = (values) => [...new Set(values)];
 
+const formatMonth = (month) => (month === null ? UNKNOWN_MONTH : MONTHS[month]);
+const formatDay = (day) => (day === null ? UNKNOWN_DAY : pad2(day));
+
 function formatEntry({ year, month, day, suffix }) {
-  return `${year}-${MONTHS[month]}-${pad2(day)}${suffix ? `-${suffix}` : ''}`;
+  return `${year}-${formatMonth(month)}-${formatDay(day)}${suffix ? `-${suffix}` : ''}`;
 }
 
-const weekdayOf = ({ year, month, day }) => WEEKDAYS[new Date(year, month, day).getDay()];
+const weekdayOf = ({ year, month, day }) => (day === null ? '' : WEEKDAYS[new Date(year, month, day).getDay()]);
+
+// Unknown months and days (null) sort before known ones.
+const dateKey = (v) => v ?? -1;
 
 function loadEntries(files) {
   const entries = [];
@@ -97,13 +109,16 @@ function loadEntries(files) {
     const m = FILE_RE.exec(file);
     if (!m) continue;
     const year = Number(m[1]);
-    const month = Number(m[2]) - 1;
-    const day = Number(m[3]);
-    if (month < 0 || month > 11 || day < 1 || day > daysInMonth(year, month)) continue;
+    const month = m[2] ? Number(m[2]) - 1 : null;
+    const day = m[3] ? Number(m[3]) : null;
+    if (month !== null && (month < 0 || month > 11)) continue;
+    if (day !== null && (day < 1 || day > daysInMonth(year, month))) continue;
     entries.push({ year, month, day, suffix: m[4] || '', file });
   }
+  const byDate = (a, b) => dateKey(a) - dateKey(b);
   const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
-  entries.sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day || byName(a.suffix, b.suffix));
+  entries.sort((a, b) => a.year - b.year || byDate(a.month, b.month) || byDate(a.day, b.day) ||
+    byName(a.suffix, b.suffix));
   return entries;
 }
 
@@ -117,10 +132,11 @@ function columnValues(level, parents) {
 
 // Closest item to a value: numerically for dates, exact match for suffixes.
 function nearestIndex(items, value) {
-  if (typeof value !== 'number') return Math.max(0, items.indexOf(value));
+  if (typeof value === 'string') return Math.max(0, items.indexOf(value));
+  const distance = (item) => Math.abs(dateKey(item) - dateKey(value));
   let best = 0;
   for (let i = 1; i < items.length; i++) {
-    if (Math.abs(items[i] - value) < Math.abs(items[best] - value)) best = i;
+    if (distance(items[i]) < distance(items[best])) best = i;
   }
   return best;
 }
@@ -132,7 +148,7 @@ function entryNearestToday() {
   let bestDiff = Infinity;
   for (const e of entries) {
     // Ties go to the later project because entries are sorted ascending.
-    const diff = Math.abs(new Date(e.year, e.month, e.day) - today);
+    const diff = Math.abs(new Date(e.year, e.month ?? 0, e.day ?? 1) - today);
     if (diff <= bestDiff) {
       best = e;
       bestDiff = diff;
@@ -380,8 +396,8 @@ const onTick = () => sound.tick();
 // Columns: [year] - [month] - [day] - [suffix]; each lists only values that
 // have a project, given the columns to its left.
 const yearWheel = new Wheel({ name: 'year', format: String, onTick });
-const monthWheel = new Wheel({ name: 'month', format: (m) => MONTHS[m], onTick });
-const dayWheel = new Wheel({ name: 'day', format: pad2, onTick });
+const monthWheel = new Wheel({ name: 'month', format: formatMonth, onTick });
+const dayWheel = new Wheel({ name: 'day', format: formatDay, onTick });
 const suffixWheel = new Wheel({ name: 'suffix', format: (s) => s || '—', onTick });
 const wheels = [yearWheel, monthWheel, dayWheel, suffixWheel];
 let separators = LAYOUT_3.seps.map((x) => ({ x, alpha: 1 }));
@@ -528,7 +544,7 @@ function drawReadout() {
 
   ctx.fillStyle = theme.secondary;
   ctx.font = `400 17px ${FONT}`;
-  const detail = entry.suffix ? `${weekdayOf(entry)} · ${entry.suffix}` : weekdayOf(entry);
+  const detail = [weekdayOf(entry), entry.suffix].filter(Boolean).join(' · ');
   ctx.fillText(fitText(detail, CW), CW / 2, 94);
 }
 
@@ -551,14 +567,9 @@ function drawPicker() {
   const band = { x: BAND_INSET, y: cy - ROW_H / 2, w: CW - BAND_INSET * 2, h: ROW_H };
 
   // Card
-  ctx.save();
-  ctx.shadowColor = theme.shadow;
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 6;
   ctx.fillStyle = theme.card;
   roundRect(ctx, 0, top, CW, PICKER_H, 16);
   ctx.fill();
-  ctx.restore();
 
   // Selection band
   ctx.fillStyle = theme.band;
@@ -607,6 +618,12 @@ function drawPicker() {
 
 function drawWheelRows(w, cy, alphaFor) {
   if (w.alpha <= 0.01) return;
+  const isSuffix = w === suffixWheel;
+  ctx.save();
+  if (isSuffix) {
+    ctx.font = `400 ${SUFFIX_FONT_SIZE}px ${FONT}`;
+    ctx.textAlign = 'left';
+  }
   const from = Math.max(0, Math.floor(w.pos - 5));
   const to = Math.min(w.max, Math.ceil(w.pos + 5));
   for (let i = from; i <= to; i++) {
@@ -617,11 +634,11 @@ function drawWheelRows(w, cy, alphaFor) {
     ctx.save();
     ctx.translate(w.cx, cy + RADIUS * Math.sin(angle));
     ctx.scale(1, c);
-    const text = w === suffixWheel ? fitText(w.label(i), SUFFIX_MAX_W) : w.label(i);
+    const text = isSuffix ? fitText(w.label(i), SUFFIX_MAX_W) : w.label(i);
     ctx.fillText(text, 0, 0);
     ctx.restore();
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 function drawButtons() {
@@ -787,7 +804,7 @@ function commit() {
   committed = text;
   history.replaceState(null, '', `#${text}`);
   document.title = `${text} · Projects`;
-  live.textContent = `${text}, ${weekdayOf(entry)}`;
+  live.textContent = [text, weekdayOf(entry)].filter(Boolean).join(', ');
   canvas.dispatchEvent(new CustomEvent('datechange', { detail: { ...entry, text } }));
 }
 
