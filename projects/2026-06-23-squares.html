@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Squares</title>
+  <!-- Port of 2026-06-23-squares.py (Pythonista scene).
+       Touch and drag towards the top right to spread and spin the squares. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #121212">
+  <script>
+    'use strict';
+
+    const r = () => Math.random() * 2 - 1;
+
+    const touchDistance = (touch) => Math.max((1.6 * touch.location.x + 1.6 * touch.location.y - 200) / 10, 0);
+
+    runScene({
+      setup() {
+        this.d = 0;
+        this.td = 0;
+      },
+
+      update() {
+        const { ctx } = this;
+        const { w, h } = this.size;
+
+        ctx.fillStyle = rgb(0.07, 0.07, 0.07);
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = rgb(0.96, 0.13, 0.35);
+        ctx.fillRect(w / 2 - 30 + r(), h / 2 - 30 + r(), 60, 60);
+
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(this.d * Math.PI / 180);
+        ctx.fillStyle = rgb(0.96, 0.96, 0.96);
+        ctx.fillRect(-50 - this.d, -50 - this.d, 100, 100);
+        ctx.fillRect(-50 + this.d, -50 - this.d, 100, 100);
+        ctx.fillRect(-50 - this.d, -50 + this.d, 100, 100);
+        ctx.fillRect(-50 + this.d, -50 + this.d, 100, 100);
+        ctx.restore();
+
+        this.d = 0.1 * this.td + 0.9 * this.d;
+      },
+
+      touchBegan(touch) {
+        this.td = touchDistance(touch);
+      },
+
+      touchMoved(touch) {
+        this.td = touchDistance(touch);
+      },
+    });
+  </script>
+</body>
+</html>

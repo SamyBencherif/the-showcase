@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Falling Squares</title>
+  <!-- Port of 2026-06-26-falling-squares.py (Pythonista scene).
+       Tap to throw a square that falls and leaves a trail. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #f5bfbf">
+  <script>
+    'use strict';
+
+    let ctx;
+
+    // Square outline from four lines, the top and bottom extended by half the
+    // line width so the corners close.
+    function outline(x, y) {
+      const b = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - b, y);
+      ctx.lineTo(x + 30 + b, y);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + 30);
+      ctx.moveTo(x + 30, y);
+      ctx.lineTo(x + 30, y + 30);
+      ctx.moveTo(x - b, y + 30);
+      ctx.lineTo(x + 30 + b, y + 30);
+      ctx.stroke();
+    }
+
+    class Square {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = 150;
+        this.vy = 0;
+
+        this.trail = [];
+      }
+
+      draw(dt) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = rgb(0.1, 0.28, 0.62);
+
+        for (const [x, y] of this.trail) outline(x, y);
+        outline(this.x, this.y);
+
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        this.vy += -300 * dt;
+
+        this.trail.push([this.x, this.y]);
+        this.trail = this.trail.slice(-100);
+      }
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+        this.squares = [];
+      },
+
+      update() {
+        ctx.fillStyle = rgb(0.96, 0.75, 0.75);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+        for (const square of this.squares) square.draw(this.dt);
+      },
+
+      touchBegan(touch) {
+        this.squares.push(new Square(touch.location.x - 15, touch.location.y - 15));
+      },
+    });
+  </script>
+</body>
+</html>

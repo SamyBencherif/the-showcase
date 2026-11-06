@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Squiggle Draw</title>
+  <!-- Port of 2026-06-30-squiggle-draw.py (Pythonista scene).
+       Drag to draw lines that wiggle constantly. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #bdd4ff">
+  <script>
+    'use strict';
+
+    const jitter = () => Math.random() * 2 - 1;
+
+    runScene({
+      setup() {
+        this.lines = [];
+      },
+
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = rgb(0.74, 0.83, 1.0);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.beginPath();
+        for (const l of this.lines) {
+          ctx.moveTo(l.prevLocation.x + jitter(), l.prevLocation.y + jitter());
+          ctx.lineTo(l.location.x + jitter(), l.location.y + jitter());
+        }
+        ctx.stroke();
+      },
+
+      touchMoved(touch) {
+        this.lines.push(touch);
+      },
+    });
+  </script>
+</body>
+</html>

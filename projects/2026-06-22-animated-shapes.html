@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Animated Shapes</title>
+  <!-- Port of 2026-06-22-animated-shapes.py (Pythonista scene).
+       Hold a touch to leave bright, vibrating imprints of the shapes. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #333">
+  <script>
+    'use strict';
+
+    const vibe = true;
+    let imprint = false;
+
+    let istack = [];
+    let ctx;
+
+    function drawPoly(x, y, r, c, col, pos, rot, atomic = false) {
+      if (imprint && !atomic) {
+        for (const [ex, ey, er, ec, ecol, epos, erot] of istack) {
+          const m = 2;
+          const col2 = ecol.map((v) => v * m);
+          const pos2 = vibe
+            ? [epos[0] + Math.random() * 2 - 1, epos[1] + Math.random() * 2 - 1]
+            : epos;
+          drawPoly(ex, ey, er, ec, col2, pos2, erot, true);
+        }
+        istack.push([x, y, r, c, col, pos, rot]);
+      } else if (!imprint) {
+        istack = [];
+      }
+
+      ctx.save();
+      ctx.fillStyle = rgb(...col);
+      ctx.translate(...pos);
+      ctx.rotate(rot * Math.PI / 180);
+      ctx.beginPath();
+      for (let i = 0; i < c; i++) {
+        ctx.lineTo(x + r * Math.cos(i / c * 2 * Math.PI), y + r * Math.sin(i / c * 2 * Math.PI));
+      }
+      ctx.fill();
+      ctx.restore();
+    }
+
+    runScene({
+      setup() {
+        ctx = this.ctx;
+      },
+
+      update() {
+        const { w, h } = this.size;
+
+        // Red triangle in center of screen
+        drawPoly(0, 0, 70, 3, [1, 0.15, 0], [w / 2, h / 2], -200 * this.t);
+
+        // Yellow circle
+        drawPoly(w / 2, h / 2, 20, 100, [1, 0.8, 0], [0, 0], 0);
+
+        // Blue square
+        const r = 100 + 30 * Math.sin(10 * this.t);
+        drawPoly(
+          r * Math.cos(this.t),
+          r * Math.sin(this.t),
+          10, 4, [0.18, 0.25, 1.0], [w / 2, h / 2], -200 * this.t);
+      },
+
+      touchBegan() {
+        imprint = true;
+      },
+
+      touchEnded() {
+        imprint = false;
+      },
+    });
+  </script>
+</body>
+</html>

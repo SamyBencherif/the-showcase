@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ulam Spiral</title>
+  <!-- Port of 2026-06-27-ulam.py (Pythonista scene): the numbers 1 to 1000
+       in a square spiral, primes in red. Drag to pan, pinch or scroll to zoom. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #fff">
+  <script>
+    'use strict';
+
+    function isPrime(x) {
+      if (x === 1) return false;
+      for (let i = 2; i < Math.floor(x / 2) + 1; i++) {
+        if (x % i === 0) return false;
+      }
+      return true;
+    }
+
+    const N = 1000;
+    const primes = Array.from({ length: N + 1 }, (_, i) => i > 0 && isPrime(i));
+
+    const scene = {
+      setup() {
+        this.p = [this.size.w / 2, this.size.h / 2];
+        this.z = 1;
+      },
+
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        ctx.save();
+        ctx.translate(...this.p);
+        let d = [1, 0];
+        const u = 30 * this.z;
+        let c = 1;
+        let k = 1;
+        let o = 1;
+        const fontSize = Math.trunc(16 * this.z);
+        ctx.font = `${fontSize}px Helvetica, Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // turning numbers 1 2 3 5 7 10 13 17 21
+        // deltas 1 1 2 2 3 3 4 4
+        for (let i = 1; i <= N; i++) {
+          ctx.fillStyle = primes[i] ? 'rgb(255, 0, 0)' : '#000';
+
+          if (fontSize > 0) {
+            // Text is drawn the right way up despite the y-up coordinates.
+            ctx.save();
+            ctx.scale(1, -1);
+            ctx.fillText(String(i), 0, 0);
+            ctx.restore();
+          }
+          ctx.translate(d[0] * u, d[1] * u);
+          c -= 1;
+          if (c === 0) {
+            c = k;
+            k += o % 2;
+            o += 1;
+            if (d[0] === 1) d = [0, 1];
+            else if (d[1] === 1) d = [-1, 0];
+            else if (d[0] === -1) d = [0, -1];
+            else d = [1, 0];
+          }
+        }
+        ctx.restore();
+      },
+
+      touchMoved(touch) {
+        this.p = [
+          this.p[0] + touch.location.x - touch.prevLocation.x,
+          this.p[1] + touch.location.y - touch.prevLocation.y,
+        ];
+
+        // Two-finger pinch zoom. The original measures this once per frame in
+        // update(); doing it per move keeps it from drifting while fingers rest.
+        if (this.touches.size === 2) {
+          const other = [...this.touches.values()].find((t) => t.id !== touch.id);
+          const d1 = Math.hypot(touch.location.x - other.location.x, touch.location.y - other.location.y);
+          const d0 = Math.hypot(touch.prevLocation.x - other.location.x, touch.prevLocation.y - other.location.y);
+          if (d0 > 0) this.z *= d1 / d0;
+        }
+      },
+    };
+    runScene(scene);
+
+    // Not in the original: scroll to zoom, since a mouse can't pinch.
+    document.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      scene.z *= Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.002));
+    }, { passive: false });
+  </script>
+</body>
+</html>

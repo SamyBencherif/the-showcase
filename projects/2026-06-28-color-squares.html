@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Color Squares</title>
+  <!-- Port of 2026-06-28-color-squares.py (Pythonista scene).
+       Tap a square to give it a random colour. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #f7f7f7">
+  <script>
+    'use strict';
+
+    const PADDING = 10;
+    const BEZEL = 50;
+
+    const DATA = Array(3 * 6).fill([0.97, 0.51, 0.35]);
+
+    // Bottom-left corner of grid square (u, v), and the square size.
+    function cell(size, u, v) {
+      const W = (size.w - PADDING) / 3 - PADDING;
+      return { x: PADDING + (W + PADDING) * u, y: size.h - BEZEL - (W + PADDING) * (v + 1), W };
+    }
+
+    runScene({
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = rgb(0.97, 0.97, 0.97);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        for (let u = 0; u < 3; u++) {
+          for (let v = 0; v < 6; v++) {
+            const { x, y, W } = cell(this.size, u, v);
+            ctx.fillStyle = rgb(...DATA[u + 3 * v]);
+            ctx.fillRect(x, y, W, W);
+          }
+        }
+      },
+
+      touchBegan(touch) {
+        const { x: tx, y: ty } = touch.location;
+        for (let u = 0; u < 3; u++) {
+          for (let v = 0; v < 6; v++) {
+            const { x, y, W } = cell(this.size, u, v);
+            if (tx > x && ty > y && tx < x + W && ty < y + W) {
+              DATA[u + 3 * v] = [Math.random(), Math.random(), Math.random()];
+            }
+          }
+        }
+      },
+    });
+  </script>
+</body>
+</html>

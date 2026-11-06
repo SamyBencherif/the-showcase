@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Triangle Lerp</title>
+  <!-- Port of 2026-06-29-triangle-lerp.py (Pythonista scene).
+       Touch anywhere and the triangle eases round to point towards it. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #3b3b3b">
+  <script>
+    'use strict';
+
+    const { cos, sin, atan2, PI: pi } = Math;
+
+    runScene({
+      setup() {
+        this.a = 0;
+        this.b = 0;
+      },
+
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = rgb(0.23, 0.23, 0.23);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        ctx.translate(this.size.w / 2, this.size.h / 2);
+        ctx.strokeStyle = rgb(0.51, 0.51, 0.51);
+        ctx.lineWidth = 3;
+        let R = this.size.w / 2 * 1 / 1.618;
+        let I = 256;
+        ctx.beginPath();
+        for (let i = 0; i <= I; i++) {
+          ctx.lineTo(R * cos(i / I * 2 * pi), R * sin(i / I * 2 * pi));
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = rgb(0.92, 0.49, 0.03);
+        R = this.size.w / 2 * 1 / 1.618 ** 2;
+        I = 3;
+        const o = this.a;
+        ctx.beginPath();
+        for (let i = 0; i < I; i++) {
+          ctx.lineTo(R * cos(o + i / I * 2 * pi), R * sin(o + i / I * 2 * pi));
+        }
+
+        this.a = 0.9 * this.a + 0.1 * this.b;
+
+        ctx.fill();
+      },
+
+      touch(touch) {
+        this.b = atan2(touch.location.y - this.size.h / 2, touch.location.x - this.size.w / 2);
+      },
+
+      touchBegan(touch) {
+        this.touch(touch);
+      },
+
+      touchMoved(touch) {
+        this.touch(touch);
+      },
+    });
+  </script>
+</body>
+</html>

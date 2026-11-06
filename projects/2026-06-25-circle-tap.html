@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Circle Tap</title>
+  <!-- Port of 2026-06-25-circle-tap.py (Pythonista scene).
+       Tap to change the circle's colour. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #1a1a1a">
+  <script>
+    'use strict';
+
+    runScene({
+      setup() {
+        this.colors = [
+          [0.68, 0.24, 0.88],
+          [0.88, 0.72, 0.15],
+          [0.25, 0.88, 0.12],
+          [0.88, 0.12, 0.12],
+          [0.12, 0.58, 0.88],
+        ];
+        this.tc = 0;
+      },
+
+      update() {
+        const { ctx } = this;
+        const { w, h } = this.size;
+
+        ctx.fillStyle = rgb(0.1, 0.1, 0.1);
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = rgb(...this.colors[this.tc % this.colors.length]);
+
+        ctx.translate(w / 2, h / 2);
+        const r = w * 0.5 / 1.618;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+      },
+
+      touchBegan() {
+        this.tc += 1;
+      },
+    });
+  </script>
+</body>
+</html>

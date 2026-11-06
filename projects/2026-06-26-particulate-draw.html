@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Particulate Draw</title>
+  <!-- Port of 2026-06-26-particulate-draw.py (Pythonista scene).
+       Drag to draw jittering coloured particles. -->
+  <script src="lib/scene.js"></script>
+</head>
+<body style="background: #0d0d0d">
+  <script>
+    'use strict';
+
+    class P {
+      constructor(l) {
+        this.l = { ...l };
+        this.c = [Math.random(), Math.random(), Math.random()];
+      }
+    }
+
+    runScene({
+      setup() {
+        this.p = [];
+      },
+
+      update() {
+        const { ctx } = this;
+
+        ctx.fillStyle = rgb(0.05, 0.05, 0.05);
+        ctx.fillRect(0, 0, this.size.w, this.size.h);
+
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        for (const p of this.p) {
+          ctx.fillStyle = rgb(...p.c);
+          ctx.beginPath();
+          ctx.arc(p.l.x, p.l.y, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          p.l.x += Math.random() * 2 - 1;
+          p.l.y += Math.random() * 2 - 1;
+        }
+      },
+
+      touchMoved(touch) {
+        this.p.push(new P(touch.location));
+      },
+    });
+  </script>
+</body>
+</html>
