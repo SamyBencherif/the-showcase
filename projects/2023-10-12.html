@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>2023-10-12</title>
+  <!-- Port of 2023-10-12.py (Pythonista scene): a field of seeded random circles.
+       Drag to pan, pinch or scroll to zoom. -->
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: rgb(166, 209, 214);
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <script>
+    'use strict';
+
+    // Python's random module (MT19937 seeded by init_by_array), so seed("turkey")
+    // lays out exactly the same circles as the original script.
+    function pythonRandom(seed) {
+      const N = 624;
+      const mt = new Uint32Array(N);
+      let mti = N;
+
+      function initGenrand(s) {
+        mt[0] = s >>> 0;
+        for (mti = 1; mti < N; mti++) {
+          const prev = mt[mti - 1] ^ (mt[mti - 1] >>> 30);
+          mt[mti] = (Math.imul(1812433253, prev) + mti) >>> 0;
+        }
+      }
+
+      function initByArray(key) {
+        initGenrand(19650218);
+        let i = 1;
+        let j = 0;
+        for (let k = Math.max(N, key.length); k; k--) {
+          const prev = mt[i - 1] ^ (mt[i - 1] >>> 30);
+          mt[i] = ((mt[i] ^ Math.imul(prev, 1664525)) + key[j] + j) >>> 0;
+          i++;
+          j++;
+          if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+          if (j >= key.length) j = 0;
+        }
+        for (let k = N - 1; k; k--) {
+          const prev = mt[i - 1] ^ (mt[i - 1] >>> 30);
+          mt[i] = ((mt[i] ^ Math.imul(prev, 1566083941)) - i) >>> 0;
+          i++;
+          if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+        }
+        mt[0] = 0x80000000;
+      }
+
+      function genrand() {
+        if (mti >= N) {
+          for (let k = 0; k < N; k++) {
+            const y = (mt[k] & 0x80000000) | (mt[(k + 1) % N] & 0x7fffffff);
+            mt[k] = mt[(k + 397) % N] ^ (y >>> 1) ^ (y & 1 ? 0x9908b0df : 0);
+          }
+          mti = 0;
+        }
+        let y = mt[mti++];
+        y ^= y >>> 11;
+        y ^= (y << 7) & 0x9d2c5680;
+        y ^= (y << 15) & 0xefc60000;
+        y ^= y >>> 18;
+        return y >>> 0;
+      }
+
+      // Python seeds with the integer's 32-bit words, least significant first.
+      const key = [];
+      for (let n = BigInt(Math.abs(seed)); key.length === 0 || n > 0n; n >>= 32n) {
+        key.push(Number(n & 0xffffffffn));
+      }
+      initByArray(key);
+
+      return () => ((genrand() >>> 5) * 67108864 + (genrand() >>> 6)) / 9007199254740992;
+    }
+
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+
+    // setup()
+    const random = pythonRandom(parseInt('turkey', 36));
+    const circles = [];
+
+    // far view
+    // let pos = { x: 0, y: 0 };
+    // let scale = 0.006;
+
+    // near view
+    let pos = { x: 4503.117494908009, y: 17891.16180606897 };
+    let scale = 10;
+
+    const R = 20;
+    for (let i = 0; i < 60 * R ** 2; i++) { // 24,000 iterations
+      const x = R * (-1000 + 2000 * random());
+      const y = R * (-1000 + 2000 * random());
+      const radius = 10 + 200 * random() ** 3;
+      const color = `rgb(${255 * random()}, ${255 * random()}, ${255 * random()})`;
+      circles.push({ x, y, radius, color });
+    }
+
+    let width = 0;
+    let height = 0;
+    let dirty = true;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dirty = true;
+    }
+
+    // update(). Pythonista's y axis points up, so world y is flipped on screen.
+    function draw() {
+      ctx.fillStyle = 'rgb(166, 209, 214)';
+      ctx.fillRect(0, 0, width, height);
+
+      // Skip circles that are off screen; there are 24,000 of them.
+      const halfW = width / 2 / scale;
+      const halfH = height / 2 / scale;
+      for (const c of circles) {
+        const dx = c.x - pos.x;
+        const dy = c.y - pos.y;
+        if (Math.abs(dx) - c.radius > halfW || Math.abs(dy) - c.radius > halfH) continue;
+        ctx.fillStyle = c.color;
+        ctx.beginPath();
+        ctx.arc(width / 2 + dx * scale, height / 2 - dy * scale, c.radius * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function frame() {
+      if (dirty) {
+        draw();
+        dirty = false;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // touch_moved(): every moving finger pans; two fingers also pinch-zoom
+    // about the centre of the screen.
+    const touches = new Map();
+
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      const prev = touches.get(e.pointerId);
+      if (!prev) return;
+      const loc = { x: e.clientX, y: e.clientY };
+
+      pos = {
+        x: pos.x + (prev.x - loc.x) / scale,
+        y: pos.y - (prev.y - loc.y) / scale,
+      };
+
+      if (touches.size === 2) {
+        const other = [...touches].find(([id]) => id !== e.pointerId)[1];
+        const d1 = Math.hypot(loc.x - other.x, loc.y - other.y);
+        const d0 = Math.hypot(prev.x - other.x, prev.y - other.y);
+        if (d0 > 0) scale *= d1 / d0;
+      }
+
+      touches.set(e.pointerId, loc);
+      dirty = true;
+    });
+
+    const endTouch = (e) => touches.delete(e.pointerId);
+    canvas.addEventListener('pointerup', endTouch);
+    canvas.addEventListener('pointercancel', endTouch);
+
+    // Not in the original: scroll to zoom, since a mouse can't pinch.
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      scale *= Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.002));
+      dirty = true;
+    }, { passive: false });
+
+    window.addEventListener('resize', resize);
+    resize();
+    draw();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

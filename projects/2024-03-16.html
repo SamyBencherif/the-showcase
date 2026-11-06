@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dots and Connections</title>
+  <!-- Port of 2024-03-16.py (Pythonista scene), 2024-03-16 Samie Bee.
+       Tap to add dots; every dot is connected to every other. -->
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #06525e;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <script>
+    'use strict';
+
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+    let width = 0;
+    let height = 0;
+    let dirty = true;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dirty = true;
+    }
+
+    // setup(). Points are stored in Pythonista coordinates: origin at the
+    // bottom left, y pointing up.
+    const a = [];
+
+    // update()
+    function draw() {
+      ctx.fillStyle = '#06525e';
+      ctx.fillRect(0, 0, width, height);
+      ctx.save();
+      ctx.translate(0, height);
+      ctx.scale(1, -1);
+
+      const r = 10;
+
+      ctx.strokeStyle = '#2a8a7e';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const p of a) {
+        for (const q of a) {
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+        }
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = '#2a8a7e';
+      for (const p of a) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function frame() {
+      if (dirty) {
+        draw();
+        dirty = false;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // touch_began()
+    canvas.addEventListener('pointerdown', (e) => {
+      a.push({ x: e.clientX, y: height - e.clientY });
+      dirty = true;
+    });
+
+    window.addEventListener('resize', resize);
+    resize();
+    draw();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

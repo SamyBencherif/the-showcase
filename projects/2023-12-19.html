@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>2023-12-19</title>
+  <!-- Port of 2023-12-19.py (Pythonista scene): a ball falls and bounces off
+       lines you draw by dragging. -->
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #f7f7f7;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <script>
+    'use strict';
+
+    // World coordinates match Pythonista: origin at the centre of the screen,
+    // y pointing up.
+
+    // Returns the nearest point on line to ball.
+    function nearestPoint(line, ball) {
+      const lx = line.x0;
+      const ly = line.y0;
+      const dx = line.x1 - line.x0;
+      const dy = line.y1 - line.y0;
+
+      let i = 0;
+
+      // As in the original, horizontal and vertical lines skip the projection,
+      // so they only collide at their starting point.
+      if (dx && dy) {
+        i = -(-2 * ball.x * dx - 2 * ball.y * dy + 2 * lx * dx + 2 * ly * dy) / (2 * dx ** 2 + 2 * dy ** 2);
+      }
+
+      if (i < 0) i = 0;
+      if (i > 1) i = 1;
+
+      return [lx + dx * i, ly + dy * i];
+    }
+
+    class Ball {
+      constructor(x, y, r, c) {
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.c = c;
+        this.vx = 0;
+        this.vy = 0;
+      }
+
+      step(dt, lines) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        this.vy -= 100 * dt;
+
+        for (const line of lines) {
+          const [nx, ny] = nearestPoint(line, this);
+          const distSq = (nx - this.x) ** 2 + (ny - this.y) ** 2;
+          if (distSq <= this.r ** 2) {
+            // collision btwn ball & line
+            const nrmX = (this.x - nx) / this.r;
+            const nrmY = (this.y - ny) / this.r;
+
+            const vnx = -nrmY * this.vx + nrmX * this.vy;
+            const vny = nrmX * this.vx + nrmY * this.vy;
+
+            this.vx = vnx * -nrmY - vny * nrmX;
+            this.vy = vnx * nrmX - vny * nrmY;
+
+            // get out of collision
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+          }
+        }
+      }
+    }
+
+    class Line {
+      constructor(x0, y0, x1, y1) {
+        this.x0 = x0;
+        this.y0 = y0;
+        this.x1 = x1;
+        this.y1 = y1;
+      }
+    }
+
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+    let width = 0;
+    let height = 0;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // setup()
+    const balls = [new Ball(0, height / 2 + 20, 20, '#39b1ff')];
+    const lines = [];
+
+    // update()
+    let last = performance.now();
+    function frame(now) {
+      // Cap dt so a backgrounded tab doesn't teleport the ball through lines.
+      const dt = Math.min((now - last) / 1000, 1 / 20);
+      last = now;
+
+      ctx.fillStyle = '#f7f7f7';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.scale(1, -1);
+
+      // render balls
+      for (const ball of balls) {
+        ctx.fillStyle = ball.c;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+        ball.step(dt, lines);
+
+        if (ball.y + ball.r < -height / 2) {
+          ball.x = 0;
+          ball.y = height / 2 + 20;
+          ball.vx = 0;
+          ball.vy = 0;
+        }
+      }
+
+      // render lines
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      for (const ln of lines) {
+        ctx.beginPath();
+        ctx.moveTo(ln.x0, ln.y0);
+        ctx.lineTo(ln.x1, ln.y1);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // Touch location in world coordinates.
+    const toWorld = (e) => [e.clientX - width / 2, height / 2 - e.clientY];
+    let drawing = 0;
+
+    // touch_began(): start a new line where the finger lands.
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      drawing++;
+      const [x, y] = toWorld(e);
+      lines.push(new Line(x, y, x, y));
+    });
+
+    // touch_moved(): drag the end of the newest line.
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      const [x, y] = toWorld(e);
+      lines[lines.length - 1].x1 = x;
+      lines[lines.length - 1].y1 = y;
+    });
+
+    const endTouch = () => { drawing = Math.max(0, drawing - 1); };
+    canvas.addEventListener('pointerup', endTouch);
+    canvas.addEventListener('pointercancel', endTouch);
+  </script>
+</body>
+</html>
