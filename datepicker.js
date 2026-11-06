@@ -7,10 +7,11 @@
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// Project files are named yyyy-mm-dd[-suffix].ext and listed in projects.js,
-// which build-projects.js generates from the projects/ folder.
+// Project pages are named yyyy-mm-dd[-suffix].html and listed in projects.js,
+// which build-projects.js generates from the projects/ folder. Other files
+// there (such as original sources) are ignored.
 const PROJECT_DIR = 'projects/';
-const FILE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:-(.+?))?(?:\.[^.]+)?$/;
+const FILE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:-(.+?))?\.html?$/i;
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", ' +
   '"Helvetica Neue", "Segoe UI", Roboto, Inter, system-ui, sans-serif';
@@ -174,7 +175,7 @@ class Wheel {
     this.format = format;
     this.onTick = onTick;
     this.items = [];
-    this.itemsKey = '';
+    this.itemsKey = null;
     this.x0 = 0;
     this.x1 = 0;
     this.cx = 0;
@@ -200,7 +201,7 @@ class Wheel {
 
   // Swaps in a new item list, keeping the wheel on the same (or nearest) value.
   setItems(items) {
-    const key = items.join('\u0000');
+    const key = JSON.stringify(items);
     if (key === this.itemsKey) return;
     this.itemsKey = key;
     const old = this.items;
