@@ -7,13 +7,15 @@
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// Project pages are named yyyy-mm-dd[-suffix].html and listed in projects.js,
-// which build-projects.js generates from the projects/ folder. Other files
-// there (such as original sources) are ignored. When the exact date isn't
-// known, the day, or the month and day, can be left out: yyyy-mm[-suffix].html
-// or yyyy[-suffix].html.
+// Projects are listed in projects.js, which build-projects.js generates from
+// the projects/ folder. A project is either a page named yyyy-mm-dd[-suffix].html
+// or a folder named yyyy-mm-dd[-suffix] holding its page (such as a CodePen
+// export); folders are listed as the path to that page. Other files there (such
+// as original sources) are ignored. When the exact date isn't known, the day,
+// or the month and day, can be left out: yyyy-mm[-suffix] or yyyy[-suffix].
 const PROJECT_DIR = 'projects/';
-const FILE_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?(?:-(.+?))?\.html?$/i;
+const NAME_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?(?:-(.+))?$/;
+const PAGE_RE = /\.html?$/i;
 
 // Shown in place of an unknown month or day.
 const UNKNOWN_MONTH = '???';
@@ -106,7 +108,10 @@ const dateKey = (v) => v ?? -1;
 function loadEntries(files) {
   const entries = [];
   for (const file of files) {
-    const m = FILE_RE.exec(file);
+    const slash = file.indexOf('/');
+    if (slash < 0 && !PAGE_RE.test(file)) continue;
+    const name = slash < 0 ? file.replace(PAGE_RE, '') : file.slice(0, slash);
+    const m = NAME_RE.exec(name);
     if (!m) continue;
     const year = Number(m[1]);
     const month = m[2] ? Number(m[2]) - 1 : null;
@@ -429,7 +434,7 @@ function jumpToEntry(entry) {
 
 function openEntry() {
   const entry = currentEntry();
-  if (entry) window.location.href = PROJECT_DIR + encodeURIComponent(entry.file);
+  if (entry) window.location.href = PROJECT_DIR + entry.file.split('/').map(encodeURIComponent).join('/');
 }
 
 function applyLayout(r) {
